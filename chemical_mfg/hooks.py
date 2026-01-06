@@ -6,14 +6,14 @@ app_email = "sai@aitsind.com"
 app_license = "mit"
 
 
-override_doctype_class = {
-    "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.ChemicalJobCard",
-}
-
 # override_doctype_class = {
-#     "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.CustomJobCard",
-#     "Work Order": "chemical_mfg.chemical_mfg.overrides.workorder.CustomWorkOrder",
+#     "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.ChemicalJobCard",
 # }
+
+override_doctype_class = {
+    "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.CustomJobCard",
+    "Work Order": "chemical_mfg.chemical_mfg.overrides.workorder.CustomWorkOrder",
+}
 
 
 # Apps
