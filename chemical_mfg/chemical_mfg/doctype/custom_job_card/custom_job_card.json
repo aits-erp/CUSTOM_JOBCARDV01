@@ -1,0 +1,128 @@
+{
+  "doctype": "DocType",
+  "name": "Custom Job Card",
+  "module": "Chemical Mfg",
+  "custom": 1,
+  "is_submittable": 1,
+  "allow_rename": 1,
+  "track_changes": 1,
+  "engine": "InnoDB",
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "row_format": "Dynamic",
+  "index_web_pages_for_search": 1,
+  "grid_page_length": 50,
+  "rows_threshold_for_grid_search": 20,
+
+  "field_order": [
+    "section_break_main",
+    "work_order",
+    "operation",
+    "sequence_id",
+    "column_break_1",
+    "rm_stage_qty",
+    "cumulative_qty",
+    "status",
+    "section_break_rm",
+    "items"
+  ],
+
+  "fields": [
+    {
+      "fieldname": "section_break_main",
+      "fieldtype": "Section Break",
+      "label": "Job Details"
+    },
+    {
+      "fieldname": "work_order",
+      "fieldtype": "Link",
+      "label": "Work Order",
+      "options": "Work Order",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "operation",
+      "fieldtype": "Link",
+      "label": "Operation",
+      "options": "Operation",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "sequence_id",
+      "fieldtype": "Int",
+      "label": "Sequence ID",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "rm_stage_qty",
+      "fieldtype": "Float",
+      "label": "RM Total Qty (This Stage)",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "cumulative_qty",
+      "fieldtype": "Float",
+      "label": "Cumulative Qty",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "label": "Status",
+      "options": "Draft\nCompleted",
+      "default": "Draft",
+      "read_only": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "section_break_rm",
+      "fieldtype": "Section Break",
+      "label": "Raw Materials"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Raw Materials",
+      "options": "Custom Job Card Item"
+    }
+  ],
+
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "submit": 1,
+      "cancel": 1,
+      "print": 1,
+      "email": 1,
+      "export": 1,
+      "share": 1,
+      "report": 1
+    }
+  ],
+
+  "states": [
+    {
+      "title": "Draft",
+      "color": "Orange",
+      "doc_status": "0"
+    },
+    {
+      "title": "Completed",
+      "color": "Green",
+      "doc_status": "1"
+    }
+  ]
+}

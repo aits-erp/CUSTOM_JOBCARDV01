@@ -1,0 +1,41 @@
+{
+  "doctype": "DocType",
+  "name": "Custom Job Card Item",
+  "module": "Chemical Mfg",
+  "custom": 1,
+  "istable": 1,
+  "engine": "InnoDB",
+
+  "field_order": [
+    "item_code",
+    "required_qty",
+    "warehouse"
+  ],
+
+  "fields": [
+    {
+      "fieldname": "item_code",
+      "fieldtype": "Link",
+      "label": "Item",
+      "options": "Item",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "required_qty",
+      "fieldtype": "Float",
+      "label": "Required Qty",
+      "reqd": 1,
+      "in_list_view": 1
+    },
+    {
+      "fieldname": "warehouse",
+      "fieldtype": "Link",
+      "label": "Warehouse",
+      "options": "Warehouse",
+      "in_list_view": 1
+    }
+  ],
+
+  "permissions": []
+}
