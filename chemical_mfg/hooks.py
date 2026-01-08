@@ -15,6 +15,9 @@ override_doctype_class = {
     "Work Order": "chemical_mfg.chemical_mfg.overrides.workorder.CustomWorkOrder",
 }
 
+override_doctype_class = {
+    "Stock Entry": "chemical_mfg.chemical_mfg.overrides.stock_entry.CustomStockEntry",
+}
 
 # Apps
 # ------------------
