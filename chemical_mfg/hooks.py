@@ -19,12 +19,12 @@ override_doctype_class = {
 # -----------------------------------------
 # Stock Entry Events (THIS IS IMPORTANT)
 # -----------------------------------------
-doc_events = {
-    "Stock Entry": {
-        "on_submit": "chemical_mfg.chemical_mfg.stock_entry_hooks.update_consumed_qty",
-        "on_cancel": "chemical_mfg.chemical_mfg.stock_entry_hooks.rollback_consumed_qty",
-    }
-}
+# doc_events = {
+#     "Stock Entry": {
+#         "on_submit": "chemical_mfg.chemical_mfg.stock_entry_hooks.update_consumed_qty",
+#         "on_cancel": "chemical_mfg.chemical_mfg.stock_entry_hooks.rollback_consumed_qty",
+#     }
+# }
 
 # Apps
 # ------------------
