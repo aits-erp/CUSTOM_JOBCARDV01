@@ -1,26 +1,43 @@
 import frappe
-from erpnext.stock.doctype.stock_entry.stock_entry import StockEntry
 
 
-class CustomStockEntry(StockEntry):
+def update_consumed_qty(doc, method):
+    if doc.stock_entry_type != "Material Consumption for Manufacture":
+        return
 
-    def on_submit(self):
-        super().on_submit()
+    if not doc.work_order or not doc.total_qty:
+        return
 
-        if (
-            self.stock_entry_type == "Material Consumption for Manufacture"
-            and self.work_order
-            and self.total_qty
-        ):
-            consumed = frappe.db.get_value(
-                "Work Order",
-                self.work_order,
-                "custom_consumed_qty_total"
-            ) or 0
+    consumed = frappe.db.get_value(
+        "Work Order",
+        doc.work_order,
+        "custom_consumed_qty_total"
+    ) or 0
 
-            frappe.db.set_value(
-                "Work Order",
-                self.work_order,
-                "custom_consumed_qty_total",
-                consumed + self.total_qty
-            )
+    frappe.db.set_value(
+        "Work Order",
+        doc.work_order,
+        "custom_consumed_qty_total",
+        consumed + doc.total_qty
+    )
+
+
+def rollback_consumed_qty(doc, method):
+    if doc.stock_entry_type != "Material Consumption for Manufacture":
+        return
+
+    if not doc.work_order or not doc.total_qty:
+        return
+
+    consumed = frappe.db.get_value(
+        "Work Order",
+        doc.work_order,
+        "custom_consumed_qty_total"
+    ) or 0
+
+    frappe.db.set_value(
+        "Work Order",
+        doc.work_order,
+        "custom_consumed_qty_total",
+        max(consumed - doc.total_qty, 0)
+    )

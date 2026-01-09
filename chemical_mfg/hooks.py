@@ -15,8 +15,15 @@ override_doctype_class = {
     "Work Order": "chemical_mfg.chemical_mfg.overrides.workorder.CustomWorkOrder",
 }
 
-override_doctype_class = {
-    "Stock Entry": "chemical_mfg.chemical_mfg.overrides.stock_entry.CustomStockEntry",
+
+# -----------------------------------------
+# Stock Entry Events (THIS IS IMPORTANT)
+# -----------------------------------------
+doc_events = {
+    "Stock Entry": {
+        "on_submit": "chemical_mfg.chemical_mfg.stock_entry_hooks.update_consumed_qty",
+        "on_cancel": "chemical_mfg.chemical_mfg.stock_entry_hooks.rollback_consumed_qty",
+    }
 }
 
 # Apps
