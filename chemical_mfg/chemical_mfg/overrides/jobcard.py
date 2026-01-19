@@ -27,48 +27,48 @@ class CustomJobCard(JobCard):
     # --------------------------------------------------
     # ON SUBMIT → APPLY CUMULATIVE LOGIC
     # --------------------------------------------------
-    def on_submit(self):
-        super().on_submit()
-        self.db_set("process_loss_qty", 0, update_modified=False)
-        self.update_cumulative_completed_qty()
+    # def on_submit(self):
+    #     super().on_submit()
+    #     self.db_set("process_loss_qty", 0, update_modified=False)
+    #     self.update_cumulative_completed_qty()
 
-    # --------------------------------------------------
-    # ✅ FIXED CUMULATIVE QTY LOGIC
-    # --------------------------------------------------
-    def update_cumulative_completed_qty(self):
-        """
-        Operation-wise cumulative completed qty
-        """
+    # # --------------------------------------------------
+    # # ✅ FIXED CUMULATIVE QTY LOGIC
+    # # --------------------------------------------------
+    # def update_cumulative_completed_qty(self):
+    #     """
+    #     Operation-wise cumulative completed qty
+    #     """
 
-        if not self.work_order or not self.operation:
-            return
+    #     if not self.work_order or not self.operation:
+    #         return
 
-        wo = frappe.get_doc("Work Order", self.work_order)
+    #     wo = frappe.get_doc("Work Order", self.work_order)
 
-        # Find current operation row
-        current_op = None
-        for op in wo.operations:
-            if op.operation == self.operation:
-                current_op = op
-                break
+    #     # Find current operation row
+    #     current_op = None
+    #     for op in wo.operations:
+    #         if op.operation == self.operation:
+    #             current_op = op
+    #             break
 
-        if not current_op:
-            return
+    #     if not current_op:
+    #         return
 
-        current_seq = flt(current_op.sequence_id)
+    #     current_seq = flt(current_op.sequence_id)
 
-        # ✅ CORRECT FIELD
-        current_qty = flt(self.total_completed_qty or 0)
+    #     # ✅ CORRECT FIELD
+    #     current_qty = flt(self.total_completed_qty or 0)
 
-        # Sum previous operations
-        previous_total = 0
-        for op in wo.operations:
-            if flt(op.sequence_id) < current_seq:
-                previous_total += flt(op.completed_qty or 0)
+    #     # Sum previous operations
+    #     previous_total = 0
+    #     for op in wo.operations:
+    #         if flt(op.sequence_id) < current_seq:
+    #             previous_total += flt(op.completed_qty or 0)
 
-        cumulative_qty = previous_total + current_qty
+    #     cumulative_qty = previous_total + current_qty
 
-        # Update only this operation row
-        current_op.completed_qty = cumulative_qty
+    #     # Update only this operation row
+    #     current_op.completed_qty = cumulative_qty
 
-        wo.save(ignore_permissions=True)
+    #     wo.save(ignore_permissions=True)
