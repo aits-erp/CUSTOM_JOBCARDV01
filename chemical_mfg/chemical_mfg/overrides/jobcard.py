@@ -5,9 +5,9 @@ from erpnext.manufacturing.doctype.job_card.job_card import JobCard
 
 class CustomJobCard(JobCard):
 
-    # ---------------------------------------------
-    # KEEP YOUR EXISTING LOGIC (UNCHANGED)
-    # ---------------------------------------------
+    # --------------------------------------------------
+    # DISABLE STANDARD VALIDATIONS (AS YOU WANT)
+    # --------------------------------------------------
     def validate_job_card(self):
         return
 
@@ -17,34 +17,27 @@ class CustomJobCard(JobCard):
     def validate_job_card_qty(self):
         return
 
-    # ---------------------------------------------
-    # KEEP EXISTING VALIDATE
-    # ---------------------------------------------
+    # --------------------------------------------------
+    # KEEP STANDARD VALIDATE + KILL PROCESS LOSS
+    # --------------------------------------------------
     def validate(self):
         super().validate()
-
-        # 🚫 Kill process loss at source
         self.process_loss_qty = 0
 
-    # ---------------------------------------------
-    # ADD CUMULATIVE QTY LOGIC
-    # ---------------------------------------------
+    # --------------------------------------------------
+    # ON SUBMIT → APPLY CUMULATIVE LOGIC
+    # --------------------------------------------------
     def on_submit(self):
-        # Let ERPNext do its standard submit work
         super().on_submit()
-
-        # 🔒 Force remove loss AFTER ERPNext logic
         self.db_set("process_loss_qty", 0, update_modified=False)
-
-        # ➕ Apply cumulative completed qty logic
         self.update_cumulative_completed_qty()
 
-    # ---------------------------------------------
-    # INTERNAL METHOD
-    # ---------------------------------------------
+    # --------------------------------------------------
+    # ✅ FIXED CUMULATIVE QTY LOGIC
+    # --------------------------------------------------
     def update_cumulative_completed_qty(self):
         """
-        Make completed_qty cumulative based on operation sequence
+        Operation-wise cumulative completed qty
         """
 
         if not self.work_order or not self.operation:
@@ -52,8 +45,9 @@ class CustomJobCard(JobCard):
 
         wo = frappe.get_doc("Work Order", self.work_order)
 
+        # Find current operation row
         current_op = None
-        for op in wo.operations or []:
+        for op in wo.operations:
             if op.operation == self.operation:
                 current_op = op
                 break
@@ -62,17 +56,19 @@ class CustomJobCard(JobCard):
             return
 
         current_seq = flt(current_op.sequence_id)
-        current_qty = flt(self.completed_qty)
 
-        # Sum completed qty of all previous operations
+        # ✅ CORRECT FIELD
+        current_qty = flt(self.total_completed_qty or 0)
+
+        # Sum previous operations
         previous_total = 0
-        for op in wo.operations or []:
+        for op in wo.operations:
             if flt(op.sequence_id) < current_seq:
-                previous_total += flt(op.completed_qty)
+                previous_total += flt(op.completed_qty or 0)
 
         cumulative_qty = previous_total + current_qty
 
-        # Update only the current operation row
+        # Update only this operation row
         current_op.completed_qty = cumulative_qty
 
         wo.save(ignore_permissions=True)
