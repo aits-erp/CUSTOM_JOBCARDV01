@@ -64,7 +64,7 @@ from erpnext.manufacturing.doctype.work_order.work_order import WorkOrder
 class CustomWorkOrder(WorkOrder):
 
     # --------------------------------------------------
-    # DISABLE STANDARD VALIDATIONS (your existing logic)
+    # DISABLE STANDARD VALIDATIONS
     # --------------------------------------------------
     def validate_completed_qty(self):
         pass
@@ -76,52 +76,82 @@ class CustomWorkOrder(WorkOrder):
         pass
 
     # --------------------------------------------------
-    # OPERATION STATUS (your existing logic)
+    # OPERATION STATUS
     # --------------------------------------------------
     def update_operation_status(self):
         """
         Chemical / process manufacturing:
-        - No qty equality enforcement
-        - Status only depends on whether something is completed
+        Status depends only on completed qty
         """
-        for d in self.get("operations"):
+        for d in self.get("operations") or []:
             if flt(d.completed_qty) > 0:
                 d.status = "Completed"
             else:
                 d.status = "Pending"
 
     # --------------------------------------------------
-    # 🔴 REQUIRED ITEMS (THIS FIXES R1106 MERGING)
+    # REQUIRED ITEMS (ERPNext v15 SAFE)
     # --------------------------------------------------
     def set_required_items(self, reset_only_qty=False):
-    """
-    CORE FIX:
-    - Do NOT merge same item across operations
-    - One BOM row = one Required Item row
-    - ERPNext v15 compatible
-    """
+        """
+        ERPNext v15 SAFE override
 
-    # Ignore reset_only_qty intentionally (but must accept it)
-    self.set("required_items", [])
+        - Same item in different operations is NOT merged
+        - When reset_only_qty=True, rows are preserved
+        """
 
-    if not self.bom_no:
-        return
+        # Called by ERPNext many times – be defensive
+        if reset_only_qty:
+            for d in self.get("required_items") or []:
+                d.required_qty = flt(d.required_qty)
+            return
 
-    bom = frappe.get_doc("BOM", self.bom_no)
+        # Full rebuild only when BOM is set
+        self.set("required_items", [])
 
-    for bom_item in bom.items:
-        self.append("required_items", {
-            "item_code": bom_item.item_code,
-            "description": bom_item.description,
-            "required_qty": flt(bom_item.qty) * flt(self.qty),
-            "uom": bom_item.uom,
-            "stock_uom": bom_item.stock_uom,
-            "conversion_factor": bom_item.conversion_factor or 1,
-            "source_warehouse": (
-                bom_item.source_warehouse
-                or self.source_warehouse
-            ),
-            "operation": bom_item.operation,
-            "allow_alternative_item": 0,
-            "include_item_in_manufacturing": 1,
-        })
+        if not self.bom_no:
+            return
+
+        try:
+            bom = frappe.get_doc("BOM", self.bom_no)
+        except frappe.DoesNotExistError:
+            return
+
+        for bom_item in bom.items or []:
+            self.append("required_items", {
+                "item_code": bom_item.item_code,
+                "description": bom_item.description,
+                "required_qty": flt(bom_item.qty) * flt(self.qty),
+                "uom": bom_item.uom,
+                "stock_uom": bom_item.stock_uom,
+                "conversion_factor": bom_item.conversion_factor or 1,
+                "source_warehouse": (
+                    bom_item.source_warehouse
+                    or self.source_warehouse
+                ),
+                "operation": bom_item.operation,
+                "allow_alternative_item": 0,
+                "include_item_in_manufacturing": 1,
+            })
+
+    # --------------------------------------------------
+    # MANUFACTURED QTY / PROCESS LOSS
+    # --------------------------------------------------
+    def update_work_order_qty(self):
+        """
+        - Disable process loss
+        - Manufactured qty = max completed qty
+        """
+
+        # Let ERPNext do its internal calculations first
+        super().update_work_order_qty()
+
+        # Kill process loss
+        self.process_loss_qty = 0
+
+        if self.operations:
+            self.manufactured_qty = max(
+                flt(d.completed_qty) for d in self.operations
+            )
+        else:
+            self.manufactured_qty = flt(self.qty_completed)
