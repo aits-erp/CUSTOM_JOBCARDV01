@@ -37,21 +37,21 @@ from erpnext.manufacturing.doctype.job_card.job_card import JobCard
 class CustomJobCard(JobCard):
 
     # --------------------------------------------------
-    # 🔥 STOP "Document modified" error
+    # 🔥 CRITICAL FIX: ensure _action exists on insert
     # --------------------------------------------------
-    def check_if_latest(self):
-        # Disable optimistic locking for Job Card
-        return
+    def before_insert(self):
+        # Frappe expects this during _validate_links
+        self._action = "insert"
 
     # --------------------------------------------------
-    # Fix wrong status value
+    # Fix wrong status string
     # --------------------------------------------------
     def validate(self):
         if self.status == "Complete":
             self.status = "Completed"
 
     # --------------------------------------------------
-    # Disable qty validations
+    # ❌ Disable ALL qty validations (only these)
     # --------------------------------------------------
     def validate_previous_operation_completed_qty(self):
         return
@@ -63,7 +63,7 @@ class CustomJobCard(JobCard):
         return
 
     # --------------------------------------------------
-    # Safe submit
+    # Safe submit (NO db_set here)
     # --------------------------------------------------
     def on_submit(self):
         self.status = "Completed"
