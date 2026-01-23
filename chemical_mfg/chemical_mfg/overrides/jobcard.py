@@ -2,69 +2,52 @@ import frappe
 from frappe.utils import flt
 from erpnext.manufacturing.doctype.job_card.job_card import JobCard
 
-# class CustomJobCard(JobCard):
-
-#     def validate(self):
-#         # Fix wrong status string safely
-#         if self.status == "Complete":
-#             self.status = "Completed"
-
-#     # ❌ Disable ALL quantity validations
-#     def validate_previous_operation_completed_qty(self):
-#         return
-
-#     def validate_completed_qty(self):
-#         return
-
-#     def validate_qty(self):
-#         return
-
-#     # ❌ Disable submit-time qty enforcement
-#     def on_submit(self):
-#         """
-#         Skip:
-#         - total_completed_qty == for_quantity
-#         - previous operation qty checks
-#         """
-
-#         # ✅ ONLY set value in memory
-#         self.status = "Completed"
-
-#         # ❌ DO NOT call db_set here
-#         return
-
 
 class CustomJobCard(JobCard):
 
     # --------------------------------------------------
-    # 🔥 CRITICAL FIX: ensure _action exists on insert
+    # DISABLE STANDARD VALIDATIONS (AS REQUIRED)
     # --------------------------------------------------
-    def before_insert(self):
-        # Frappe expects this during _validate_links
-        self._action = "insert"
+    def validate_job_card(self):
+        return
+
+    def validate_sequence_id(self):
+        return
+
+    def validate_job_card_qty(self):
+        return
 
     # --------------------------------------------------
-    # Fix wrong status string
+    # KEEP STANDARD VALIDATE + KILL PROCESS LOSS
     # --------------------------------------------------
     def validate(self):
-        if self.status == "Complete":
-            self.status = "Completed"
+        # keep standard ERPNext validate
+        super().validate()
+
+        # always force process loss to zero
+        self.process_loss_qty = 0
 
     # --------------------------------------------------
-    # ❌ Disable ALL qty validations (only these)
-    # --------------------------------------------------
-    def validate_previous_operation_completed_qty(self):
-        return
-
-    def validate_completed_qty(self):
-        return
-
-    def validate_qty(self):
-        return
-
-    # --------------------------------------------------
-    # Safe submit (NO db_set here)
+    # ONLY FIX STATUS (NO EXTRA LOGIC)
     # --------------------------------------------------
     def on_submit(self):
-        self.status = "Completed"
-        return
+        # keep standard submit flow
+        super().on_submit()
+
+        # ❌ DO NOT db_set inside submit (causes refresh error)
+        # just update in memory
+        self.process_loss_qty = 0
+
+        # update status safely
+        self.update_job_card_status()
+
+    # --------------------------------------------------
+    # STATUS FIX (MINIMAL & SAFE)
+    # --------------------------------------------------
+    def update_job_card_status(self):
+        completed = flt(self.total_completed_qty or 0)
+        planned = flt(self.for_quantity or 0)
+
+        if planned > 0 and completed >= planned:
+            # ❌ do not use db_set here
+            self.status = "Completed"
