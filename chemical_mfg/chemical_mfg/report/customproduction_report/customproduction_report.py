@@ -1,102 +1,131 @@
 import frappe
+from frappe.utils import flt
+
 
 def execute(filters=None):
     if not filters or not filters.get("work_order"):
         return get_columns(), []
 
     work_order = filters.get("work_order")
+    data = []
 
-    planned = {}
-    actual = {}
+    grand_planned_map = {}
+    grand_consumed_map = {}
 
-    # ----------------------------
-    # Planned Qty (Work Order Item)
-    # ----------------------------
+    # ---------------------------------
+    # Planned grouped by operation
+    # ---------------------------------
+    planned_by_op = {}
+
     wo_items = frappe.get_all(
         "Work Order Item",
         filters={"parent": work_order},
-        fields=["item_code", "required_qty"]
+        fields=["item_code", "required_qty", "operation"]
     )
 
     for row in wo_items:
-        planned[row.item_code] = row.required_qty
+        op = row.operation or "No Operation"
 
-    # ----------------------------
-    # Actual Qty (Stock Entry)
-    # ----------------------------
-    stock_entries = frappe.get_all(
-        "Stock Entry",
-        filters={
-            "work_order": work_order,
-            "docstatus": 1
-        },
-        pluck="name"
+        planned_by_op.setdefault(op, {})
+        planned_by_op[op][row.item_code] = (
+            planned_by_op[op].get(row.item_code, 0) + flt(row.required_qty)
+        )
+
+        grand_planned_map[row.item_code] = (
+            grand_planned_map.get(row.item_code, 0) + flt(row.required_qty)
+        )
+
+    # ---------------------------------
+    # Job Cards
+    # ---------------------------------
+    job_cards = frappe.get_all(
+        "Job Card",
+        filters={"work_order": work_order},
+        fields=["name", "operation", "sequence_id"],
+        order_by="sequence_id asc"
     )
 
-    for se in stock_entries:
-        se_items = frappe.get_all(
-            "Stock Entry Detail",
-            filters={"parent": se},
-            fields=["item_code", "qty"]
-        )
+    # ---------------------------------
+    # Operation loop
+    # ---------------------------------
+    for jc in job_cards:
+
+        op_name = jc.operation
+
+        # ✅ Operation header row (blank numbers)
+        data.append({
+            "operation": op_name,
+            "planned_qty": None,
+            "consumed_qty": None,
+            "difference": None,
+            "new_item": None
+        })
+
+        planned = planned_by_op.get(op_name, {})
+        actual = {}
+
+        se_items = frappe.db.sql("""
+            SELECT sed.item_code,
+                   SUM(sed.qty) AS qty
+            FROM `tabStock Entry` se
+            JOIN `tabStock Entry Detail` sed ON sed.parent = se.name
+            WHERE se.job_card = %s
+            AND se.docstatus = 1
+            AND se.stock_entry_type IN (
+                'Material Transfer for Manufacture',
+                'Material Consumption for Manufacture'
+            )
+            AND IFNULL(sed.is_finished_item,0) = 0
+            GROUP BY sed.item_code
+        """, jc.name, as_dict=1)
+
         for row in se_items:
-            actual[row.item_code] = actual.get(row.item_code, 0) + row.qty
+            actual[row.item_code] = flt(row.qty)
 
-    # ----------------------------
-    # Merge & Compare
-    # ----------------------------
-    data = []
-    all_items = set(planned.keys()) | set(actual.keys())
+            grand_consumed_map[row.item_code] = (
+                grand_consumed_map.get(row.item_code, 0) + flt(row.qty)
+            )
 
-    for item in sorted(all_items):
-        planned_qty = planned.get(item, 0)
-        consumed_qty = actual.get(item, 0)
-        difference = consumed_qty - planned_qty
+        all_items = set(planned.keys()) | set(actual.keys())
 
-        new_item = "Yes" if planned_qty == 0 and consumed_qty > 0 else "No"
+        for item in sorted(all_items):
+            p = flt(planned.get(item))
+            c = flt(actual.get(item))
+            d = c - p
 
-        data.append([
-            item,
-            planned_qty,
-            consumed_qty,
-            difference,
-            new_item
-        ])
+            data.append({
+                "operation": "",
+                "item_code": item,
+                "planned_qty": p,
+                "consumed_qty": c,
+                "difference": d,
+                "new_item": "Yes" if p == 0 and c > 0 else "No"
+            })
+
+    # ---------------------------------
+    # TOTAL
+    # ---------------------------------
+    total_planned = sum(grand_planned_map.values())
+    total_consumed = sum(grand_consumed_map.values())
+
+    data.append({
+        "operation": "TOTAL",
+        "planned_qty": total_planned,
+        "consumed_qty": total_consumed,
+        "difference": total_consumed - total_planned,
+        "new_item": None,
+        "is_total_row": 1
+    })
 
     return get_columns(), data
 
 
 def get_columns():
     return [
-        {
-            "label": "Item Code",
-            "fieldname": "item_code",
-            "fieldtype": "Link",
-            "options": "Item",
-            "width": 220
-        },
-        {
-            "label": "Planned Qty",
-            "fieldname": "planned_qty",
-            "fieldtype": "Float",
-            "width": 120
-        },
-        {
-            "label": "Consumed Qty",
-            "fieldname": "consumed_qty",
-            "fieldtype": "Float",
-            "width": 120
-        },
-        {
-            "label": "Difference",
-            "fieldname": "difference",
-            "fieldtype": "Float",
-            "width": 120
-        },
-        {
-            "label": "New Item?",
-            "fieldname": "new_item",
-            "fieldtype": "Data",
-            "width": 100
-        }
+        {"label": "Operation", "fieldname": "operation", "width": 200},
+        {"label": "Item Code", "fieldname": "item_code", "fieldtype": "Link", "options": "Item", "width": 200},
+        {"label": "Planned Qty", "fieldname": "planned_qty", "fieldtype": "Float", "width": 120},
+        {"label": "Consumed Qty", "fieldname": "consumed_qty", "fieldtype": "Float", "width": 120},
+        {"label": "Difference", "fieldname": "difference", "fieldtype": "Float", "width": 120},
+        {"label": "New Item?", "fieldname": "new_item", "width": 100},
     ]
