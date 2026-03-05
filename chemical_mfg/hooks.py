@@ -6,13 +6,48 @@ app_email = "sai@aitsind.com"
 app_license = "mit"
 
 
-# override_doctype_class = {
-#     "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.ChemicalJobCard",
-# }
 
+
+# -----------------------------
+# Override Doctype Classes
+# -----------------------------
 override_doctype_class = {
     "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.CustomJobCard",
     "Work Order": "chemical_mfg.chemical_mfg.overrides.workorder.CustomWorkOrder",
+}
+
+
+# -----------------------------
+# DocType Events
+# -----------------------------
+doc_events = {
+
+    # Work Order
+    "Work Order": {
+        "before_save": "chemical_mfg.chemical_mfg.whitelisted.work_order_methods.apply_quality_template_from_bom"
+    },
+
+    # Job Card
+    "Job Card": {
+        "before_save": "chemical_mfg.chemical_mfg.whitelisted.job_card_methods.apply_quality_template_from_work_order"
+    },
+
+    # Stock Entry
+    "Stock Entry": {
+        "on_submit": "chemical_mfg.chemical_mfg.whitelisted.stock_entry_methods.update_consumed_qty",
+        "on_cancel": "chemical_mfg.chemical_mfg.whitelisted.stock_entry_methods.rollback_consumed_qty",
+    }
+}
+
+
+# -----------------------------
+# Override ERPNext Methods
+# -----------------------------
+override_whitelisted_methods = {
+
+    "erpnext.manufacturing.doctype.work_order.work_order.make_work_order":
+        "chemical_mfg.chemical_mfg.whitelisted.api.custom_make_work_order"
+
 }
 
 
