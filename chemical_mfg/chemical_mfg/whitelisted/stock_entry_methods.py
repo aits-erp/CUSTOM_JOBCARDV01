@@ -17,3 +17,15 @@ def apply_quality_template_to_stock_entry(docname):
     se.save()
 
     return {"message": "Quality Template applied to Stock Entry"}
+
+
+# -----------------------------
+# Hooks for Stock Entry
+# -----------------------------
+
+def update_consumed_qty(doc, method=None):
+    frappe.msgprint("update_consumed_qty executed")
+
+
+def rollback_consumed_qty(doc, method=None):
+    frappe.msgprint("rollback_consumed_qty executed")
