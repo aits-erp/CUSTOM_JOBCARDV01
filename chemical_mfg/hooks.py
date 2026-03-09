@@ -29,8 +29,7 @@ doc_events = {
 
     # Job Card
     "Job Card": {
-        "before_save": "chemical_mfg.chemical_mfg.whitelisted.job_card_methods.apply_quality_template_from_work_order",
-        "validate": "chemical_mfg.chemical_mfg.manufacturing.job_card_sequence_validation.validate_job_card_sequence"
+        "before_save": "chemical_mfg.chemical_mfg.whitelisted.job_card_methods.apply_quality_template_from_work_order"
     },
 
     # Stock Entry
