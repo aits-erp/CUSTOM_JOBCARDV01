@@ -10,6 +10,9 @@ def fix_quality_inspection(docname):
 
     for row in doc.readings:
 
+        # RESET status first 🔥
+        row.status = ""
+
         # ---------- NUMERIC ----------
         if row.numeric:
 
@@ -22,7 +25,6 @@ def fix_quality_inspection(docname):
             readings = [r for r in readings if r not in [None, ""]]
 
             if not readings:
-                row.status = ""
                 continue
 
             valid_rows_found = True
@@ -42,17 +44,21 @@ def fix_quality_inspection(docname):
         # ---------- MANUAL ----------
         else:
             if not row.value:
-                row.status = ""
                 continue
 
             valid_rows_found = True
             row.status = "Accepted"
 
-    # Final status
+    # ---------- FINAL STATUS ----------
     if not valid_rows_found:
         doc.status = "Rejected"
     else:
         doc.status = overall_status
 
+    # 🔥 FORCE SAVE + DB UPDATE
+    doc.flags.ignore_validate = True
     doc.save(ignore_permissions=True)
+
+    frappe.db.commit()
+
     return "QC Updated Successfully"
