@@ -10,7 +10,7 @@ def fix_quality_inspection(docname):
 
     for row in doc.readings:
 
-        # RESET status first 🔥
+        # Default clear
         row.status = ""
 
         # ---------- NUMERIC ----------
@@ -25,7 +25,7 @@ def fix_quality_inspection(docname):
             readings = [r for r in readings if r not in [None, ""]]
 
             if not readings:
-                continue
+                continue  # ignore empty rows
 
             valid_rows_found = True
 
@@ -43,8 +43,8 @@ def fix_quality_inspection(docname):
 
         # ---------- MANUAL ----------
         else:
-            if not row.value:
-                continue
+            if not row.value or not row.value.strip():
+                continue  # ignore empty rows
 
             valid_rows_found = True
             row.status = "Accepted"
@@ -55,9 +55,15 @@ def fix_quality_inspection(docname):
     else:
         doc.status = overall_status
 
-    # 🔥 FORCE SAVE + DB UPDATE
+    # 🔥 FORCE UPDATE CHILD TABLE IN DB
     doc.flags.ignore_validate = True
     doc.save(ignore_permissions=True)
+
+    # 🔥 HARD UPDATE (VERY IMPORTANT)
+    for row in doc.readings:
+        frappe.db.set_value(row.doctype, row.name, "status", row.status)
+
+    frappe.db.set_value("Quality Inspection", doc.name, "status", doc.status)
 
     frappe.db.commit()
 
