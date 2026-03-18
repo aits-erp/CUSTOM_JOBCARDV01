@@ -16,6 +16,7 @@ doctype_js = {
 override_doctype_class = {
     "Job Card": "chemical_mfg.chemical_mfg.overrides.jobcard.CustomJobCard",
     "Work Order": "chemical_mfg.chemical_mfg.overrides.workorder.CustomWorkOrder",
+    "Quality Inspection": "chemical_mfg.chemical_mfg.overrides.quality_inspection.CustomQualityInspection"
 }
 
 
