@@ -2,7 +2,7 @@ import frappe
 
 @frappe.whitelist()
 def fix_quality_inspection(docname):
-
+#changes
     doc = frappe.get_doc("Quality Inspection", docname)
 
     overall_status = "Accepted"
