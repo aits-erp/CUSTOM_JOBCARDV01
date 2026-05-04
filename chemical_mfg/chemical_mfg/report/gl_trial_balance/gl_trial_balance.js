@@ -19,6 +19,12 @@ frappe.query_reports["GL Trial Balance"] = {
             label: "To Date",
             fieldtype: "Date",
             reqd: 1
+        },
+        {
+            fieldname: "include_group",
+            label: "Include Group Accounts",
+            fieldtype: "Check",
+            default: 0   // 🔥 default = only GL
         }
     ]
 };

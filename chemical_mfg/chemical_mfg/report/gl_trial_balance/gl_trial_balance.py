@@ -28,9 +28,21 @@ def get_columns():
     ]
 
 
+def get_condition(filters):
+    condition = ""
+    
+    # 🔥 Dynamic condition
+    if not filters.get("include_group"):
+        condition += " AND acc.is_group = 0 "
+    
+    return condition
+
+
 def get_data(filters):
-    # Opening Balance (before from_date)
-    opening = frappe.db.sql("""
+    condition = get_condition(filters)
+
+    # Opening Balance
+    opening = frappe.db.sql(f"""
         SELECT
             gle.account,
             SUM(gle.debit - gle.credit) AS balance
@@ -39,14 +51,14 @@ def get_data(filters):
         WHERE
             gle.company = %(company)s
             AND gle.posting_date < %(from_date)s
-            AND acc.is_group = 0
+            {condition}
         GROUP BY gle.account
     """, filters, as_dict=1)
 
     opening_map = {d.account: flt(d.balance) for d in opening}
 
     # Period Data
-    data = frappe.db.sql("""
+    data = frappe.db.sql(f"""
         SELECT
             gle.account,
             acc.account_name,
@@ -57,7 +69,7 @@ def get_data(filters):
         WHERE
             gle.company = %(company)s
             AND gle.posting_date BETWEEN %(from_date)s AND %(to_date)s
-            AND acc.is_group = 0
+            {condition}
         GROUP BY gle.account, acc.account_name
         ORDER BY gle.account
     """, filters, as_dict=1)
