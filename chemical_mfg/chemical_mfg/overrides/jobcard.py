@@ -4,7 +4,25 @@ from erpnext.manufacturing.doctype.job_card.job_card import JobCard
 
 
 class CustomJobCard(JobCard):
+    
 
+    def validate(self):
+
+        try:
+            super().validate()
+
+        except Exception as e:
+
+            if "Could not find Quality Inspection" in str(e):
+                frappe.msgprint("Quality Inspection bypassed")
+            else:
+                raise
+
+    # --------------------------------------------------
+    # DISABLE STRICT STANDARD VALIDATIONS
+    # --------------------------------------------------
+    def validate_completed_qty(self):
+        pass
     # --------------------------------------------------
     # DISABLE STANDARD VALIDATIONS (AS REQUIRED)
     # --------------------------------------------------
