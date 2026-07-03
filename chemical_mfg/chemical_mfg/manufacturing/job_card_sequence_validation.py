@@ -1,3 +1,34 @@
+import frappe
+
+
+def validate_job_card_sequence(doc, method=None):
+    # Auto-created job cards on Work Order submit should pass through untouched.
+    if getattr(doc, "docstatus", 0) != 1 and getattr(doc, "status", None) != "Completed":
+        return
+
+    if not getattr(doc, "sequence_id", None) or not getattr(doc, "work_order", None):
+        return
+
+    previous_cards = frappe.get_all(
+        "Job Card",
+        filters={
+            "work_order": doc.work_order,
+            "sequence_id": ["<", doc.sequence_id],
+            "docstatus": ["!=", 2],
+        },
+        fields=["name", "sequence_id", "status", "docstatus"],
+    )
+
+    for jc in previous_cards:
+        if jc.docstatus == 2:
+            continue
+
+        if jc.status != "Completed":
+            frappe.throw(
+                f"Job Card {jc.name} with Sequence {jc.sequence_id} "
+                f"must be completed before completing Sequence {doc.sequence_id}"
+            )
+
 # # import frappe
 
 
