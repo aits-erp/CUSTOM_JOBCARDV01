@@ -289,24 +289,10 @@ class CustomJobCard(JobCard):
             },
             update_modified=False,
         )
-
-        # Keep Work Order.manufactured_qty consistent with the existing
-        # chemical_mfg rule in CustomWorkOrder.update_work_order_qty()
-        # (manufactured_qty = max completed operation qty), without needing
-        # a full Work Order save.
-        max_completed = frappe.db.sql(
-            """
-            SELECT MAX(completed_qty) FROM `tabWork Order Operation`
-            WHERE parent = %s
-            """,
-            (self.work_order,),
-        )[0][0]
-
-        if max_completed is not None:
-            frappe.db.set_value(
-                "Work Order",
-                self.work_order,
-                "manufactured_qty",
-                flt(max_completed),
-                update_modified=False,
-            )
+        # NOTE: an earlier version of this method also tried to update a
+        # Work Order.manufactured_qty field. That field does not exist as a
+        # real column on this site's Work Order table (confirmed from the
+        # traceback: "Unknown column 'manufactured_qty' in 'SET'") and is
+        # not part of the stated requirements, so it has been removed.
+        # completed_qty/status on Work Order Operation (above) are the only
+        # two fields this sync is responsible for.
