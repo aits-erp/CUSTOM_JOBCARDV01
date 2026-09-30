@@ -248,17 +248,11 @@ class CustomWorkOrder(WorkOrder):
         """
         Custom Work Order validation.
 
-        Main purposes:
+        Required Items are rebuilt from the selected BOM using:
 
-        1. Update operation status according to chemical
-           manufacturing logic.
+            item_code + operation
 
-        2. ALWAYS rebuild Required Items from BOM using:
-
-               item_code + operation
-
-           This prevents the same raw material from being
-           merged when it is used in multiple operations.
+        Therefore the same item can exist in multiple operations.
 
         Example:
 
@@ -266,14 +260,14 @@ class CustomWorkOrder(WorkOrder):
             R1101 -> HOMOGENIZING
             R1101 -> FINALIZING
 
-        These remain 3 separate rows.
+        These remain separate rows.
         """
 
-        # Run standard ERPNext validations first
+        # Run standard ERPNext validation first
         super().validate()
 
         # ------------------------------------------------------
-        # 1. UPDATE OPERATION STATUS
+        # UPDATE OPERATION STATUS
         # ------------------------------------------------------
 
         try:
@@ -281,39 +275,33 @@ class CustomWorkOrder(WorkOrder):
 
         except Exception:
             frappe.log_error(
-                title="CustomWorkOrder.validate: update_operation_status failed",
+                title="CustomWorkOrder: Operation Status Error",
                 message=frappe.get_traceback(),
             )
 
         # ------------------------------------------------------
-        # 2. ALWAYS REBUILD REQUIRED ITEMS FROM BOM
+        # REBUILD REQUIRED ITEMS
         # ------------------------------------------------------
 
         if self.bom_no and flt(self.qty):
 
             try:
-                bom = frappe.get_doc("BOM", self.bom_no)
+                bom = frappe.get_doc(
+                    "BOM",
+                    self.bom_no
+                )
 
-                # IMPORTANT:
-                # Do NOT compare only row counts.
-                #
-                # Always rebuild from BOM using:
-                #
-                #     item_code + operation
-                #
-                self._rebuild_required_items_from_bom(bom)
+                self._rebuild_required_items_from_bom(
+                    bom
+                )
 
             except Exception:
 
                 frappe.log_error(
-                    title="CustomWorkOrder.validate: required-items rebuild failed",
+                    title="CustomWorkOrder: Required Items Error",
                     message=frappe.get_traceback(),
                 )
 
-                # Do not silently continue.
-                # If BOM rebuilding fails, Work Order should
-                # show the actual error instead of saving
-                # incorrect Required Items.
                 raise
 
     # ==========================================================
@@ -322,40 +310,32 @@ class CustomWorkOrder(WorkOrder):
 
     def update_operation_status(self):
         """
-        Chemical manufacturing operation status logic.
+        Chemical manufacturing rule:
 
-        Rules:
-
-            Completed Job Card exists
-                    OR
             completed_qty > 0
+                OR
+            Completed Job Card exists
 
-                    =>
-                Completed
+                =>
+            Completed
 
-            Otherwise
-                    =>
-                Pending
+        Otherwise:
 
-        This allows process loss.
-
-        Example:
-
-            Work Order Qty       = 1000 KG
-            Operation Completed  = 950 KG
-
-        Standard logic may consider this incomplete.
-
-        Our chemical logic considers it Completed because
-        completed_qty > 0.
+            Pending
         """
 
         for operation in self.get("operations") or []:
 
             has_completed_job_card = False
 
-            # Existing Work Order only
-            if operation.name and not self.is_new():
+            # --------------------------------------------------
+            # CHECK EXISTING JOB CARD
+            # --------------------------------------------------
+
+            if (
+                operation.name
+                and not self.is_new()
+            ):
 
                 has_completed_job_card = bool(
                     frappe.db.exists(
@@ -378,6 +358,7 @@ class CustomWorkOrder(WorkOrder):
                 has_completed_job_card
                 or flt(operation.completed_qty) > 0
             ):
+
                 operation.status = "Completed"
 
             # --------------------------------------------------
@@ -385,49 +366,54 @@ class CustomWorkOrder(WorkOrder):
             # --------------------------------------------------
 
             else:
+
                 operation.status = "Pending"
 
     # ==========================================================
-    # REQUIRED ITEMS
+    # SET REQUIRED ITEMS
     # ==========================================================
 
-    def set_required_items(self, reset_only_qty=False, **kwargs):
+    def set_required_items(
+        self,
+        reset_only_qty=False,
+        **kwargs
+    ):
         """
-        Override ERPNext standard Required Items generation.
+        Override standard ERPNext Required Items generation.
 
-        Standard ERPNext can group BOM items by item code.
+        Required Items are generated directly from BOM items.
 
-        We need:
+        Grouping key:
 
             item_code + operation
 
-        as the unique combination.
+        NOT:
 
-        Therefore:
-
-            R1101 + BATCHING
-            R1101 + HOMOGENIZING
-            R1101 + FINALIZING
-
-        are separate Required Item rows.
+            item_code only
         """
 
-        if not self.bom_no or not flt(self.qty):
+        if not self.bom_no:
             return
 
-        bom = frappe.get_doc("BOM", self.bom_no)
+        if not flt(self.qty):
+            return
 
-        self._rebuild_required_items_from_bom(bom)
+        bom = frappe.get_doc(
+            "BOM",
+            self.bom_no
+        )
+
+        self._rebuild_required_items_from_bom(
+            bom
+        )
 
     # ==========================================================
-    # BOM SELECTION
+    # GET ITEMS AND OPERATIONS FROM BOM
     # ==========================================================
 
     @frappe.whitelist()
     def get_items_and_operations_from_bom(self):
         """
-        Called when BOM is selected in Work Order.
-
         Handles:
 
             New Work Order
@@ -436,30 +422,44 @@ class CustomWorkOrder(WorkOrder):
                 ↓
             BOM
                 ↓
+            Work Order Operations
+                ↓
             Required Items
-                +
-            Operations
         """
 
-        if not self.bom_no or not flt(self.qty):
+        if not self.bom_no:
             return {}
 
-        bom = frappe.get_doc("BOM", self.bom_no)
+        if not flt(self.qty):
+            return {}
 
         # ------------------------------------------------------
-        # REQUIRED ITEMS
+        # GET BOM
         # ------------------------------------------------------
 
-        self._rebuild_required_items_from_bom(bom)
+        bom = frappe.get_doc(
+            "BOM",
+            self.bom_no
+        )
 
         # ------------------------------------------------------
-        # OPERATIONS
+        # IMPORTANT:
+        #
+        # CREATE WORK ORDER OPERATIONS FIRST
         # ------------------------------------------------------
 
         self.set_work_order_operations()
 
         # ------------------------------------------------------
-        # SCRAP WAREHOUSE CHECK
+        # THEN CREATE REQUIRED ITEMS
+        # ------------------------------------------------------
+
+        self._rebuild_required_items_from_bom(
+            bom
+        )
+
+        # ------------------------------------------------------
+        # STANDARD SCRAP WAREHOUSE CHECK
         # ------------------------------------------------------
 
         try:
@@ -468,7 +468,9 @@ class CustomWorkOrder(WorkOrder):
                 check_if_scrap_warehouse_mandatory,
             )
 
-            return check_if_scrap_warehouse_mandatory(self.bom_no)
+            return check_if_scrap_warehouse_mandatory(
+                self.bom_no
+            )
 
         except Exception:
 
@@ -478,141 +480,181 @@ class CustomWorkOrder(WorkOrder):
     # REBUILD REQUIRED ITEMS FROM BOM
     # ==========================================================
 
-    def _rebuild_required_items_from_bom(self, bom):
+    def _rebuild_required_items_from_bom(
+        self,
+        bom
+    ):
         """
-        Rebuild Work Order Required Items directly from BOM.
+        Build Required Items directly from BOM.
 
-        IMPORTANT LOGIC:
+        IMPORTANT:
 
-            key = (item_code, operation)
+        The grouping key is:
 
-        Therefore:
-
-            Same Item
-            +
-            Different Operation
-
-            =
-
-            Different Work Order rows.
+            (item_code, operation)
 
         Example BOM:
 
-            R1101   BATCHING       50 KG
-            R1101   HOMOGENIZING   20 KG
-            R1101   FINALIZING     10 KG
+            R1101 -> BATCHING       50 KG
+            R1101 -> HOMOGENIZING   20 KG
+            R1101 -> FINALIZING     10 KG
 
-        Work Order:
+        Result:
 
-            R1101   BATCHING       50 KG
-            R1101   HOMOGENIZING   20 KG
-            R1101   FINALIZING     10 KG
+            R1101 -> BATCHING       50 KG
+            R1101 -> HOMOGENIZING   20 KG
+            R1101 -> FINALIZING     10 KG
 
-        They are NOT merged into:
+        NOT:
 
-            R1101   80 KG
+            R1101 -> 80 KG
         """
 
-        # ------------------------------------------------------
-        # BOM QUANTITY
-        # ------------------------------------------------------
+        # ======================================================
+        # QUANTITY CALCULATION
+        # ======================================================
 
-        bom_qty = flt(bom.quantity) or 1.0
+        bom_qty = flt(
+            bom.quantity
+        ) or 1.0
 
-        # ------------------------------------------------------
-        # WORK ORDER QUANTITY
-        # ------------------------------------------------------
+        work_order_qty = flt(
+            self.qty
+        )
 
-        wo_qty = flt(self.qty)
+        if not work_order_qty:
+            self.set(
+                "required_items",
+                []
+            )
+            return
 
-        # ------------------------------------------------------
-        # QUANTITY SCALE
-        # ------------------------------------------------------
+        scale = (
+            work_order_qty
+            / bom_qty
+        )
 
-        scale = wo_qty / bom_qty
-
-        # ------------------------------------------------------
+        # ======================================================
         # GROUP BOM ITEMS
-        # ------------------------------------------------------
+        # ======================================================
 
         grouped = {}
 
-        # Preserve BOM row order
         order = []
 
-        for bom_row in bom.get("items") or []:
+        for bom_item in (
+            bom.get("items") or []
+        ):
 
-            item_code = bom_row.item_code
-            operation = bom_row.operation or ""
+            item_code = (
+                bom_item.item_code
+            )
+
+            operation = (
+                bom_item.operation
+                or ""
+            )
 
             # --------------------------------------------------
             # CRITICAL KEY
             # --------------------------------------------------
             #
-            # DO NOT use only item_code.
+            # Same item + different operation
+            # = separate row
             #
-            # Use:
-            #
-            #     item_code + operation
-            #
+            # Same item + same operation
+            # = quantity summed
             # --------------------------------------------------
 
             key = (
                 item_code,
-                operation,
+                operation
             )
-
-            # --------------------------------------------------
-            # FIRST OCCURRENCE
-            # --------------------------------------------------
 
             if key not in grouped:
 
-                order.append(key)
+                order.append(
+                    key
+                )
 
                 grouped[key] = {
 
-                    "item_code": item_code,
+                    "item_code":
+                        item_code,
 
-                    "item_name": bom_row.item_name,
+                    "item_name":
+                        bom_item.item_name,
 
-                    "description": bom_row.description,
+                    "description":
+                        bom_item.description,
 
-                    "operation": bom_row.operation,
+                    "operation":
+                        operation,
 
-                    "uom": bom_row.uom,
+                    "uom":
+                        bom_item.uom,
 
-                    "stock_uom": bom_row.stock_uom,
+                    "stock_uom":
+                        bom_item.stock_uom,
 
                     "conversion_factor":
-                        bom_row.conversion_factor or 1,
+                        bom_item.conversion_factor
+                        or 1,
 
                     "source_warehouse":
-                        bom_row.source_warehouse
+                        bom_item.source_warehouse
                         or self.source_warehouse,
 
                     "allow_alternative_item":
-                        bom_row.allow_alternative_item,
+                        bom_item.allow_alternative_item,
 
                     "include_item_in_manufacturing":
-                        bom_row.include_item_in_manufacturing,
+                        bom_item.include_item_in_manufacturing,
 
-                    "rate": bom_row.rate,
+                    "rate":
+                        flt(bom_item.rate),
 
-                    "qty": 0.0,
+                    "qty":
+                        0.0,
                 }
 
             # --------------------------------------------------
-            # ADD QUANTITY
+            # ADD BOM QUANTITY
             # --------------------------------------------------
 
-            grouped[key]["qty"] += flt(bom_row.qty)
+            grouped[key]["qty"] += flt(
+                bom_item.qty
+            )
 
         # ======================================================
-        # CLEAR EXISTING REQUIRED ITEMS
+        # PRESERVE EXISTING TRANSFERRED QTY
         # ======================================================
 
-        self.set("required_items", [])
+        existing_transferred = {}
+
+        for old_row in (
+            self.get("required_items") or []
+        ):
+
+            old_key = (
+                old_row.item_code,
+                old_row.operation or ""
+            )
+
+            existing_transferred[
+                old_key
+            ] = flt(
+                old_row.transferred_qty
+            )
+
+        # ======================================================
+        # CLEAR REQUIRED ITEMS
+        # ======================================================
+
+        self.set(
+            "required_items",
+            []
+        )
 
         # ======================================================
         # CREATE REQUIRED ITEMS
@@ -622,33 +664,50 @@ class CustomWorkOrder(WorkOrder):
 
             row = grouped[key]
 
-            # --------------------------------------------------
-            # SCALE BOM QTY TO WORK ORDER QTY
-            # --------------------------------------------------
+            required_qty = (
+                flt(row["qty"])
+                * scale
+            )
 
-            required_qty = flt(row["qty"]) * scale
+            transferred_qty = (
+                existing_transferred.get(
+                    key,
+                    0
+                )
+            )
 
             # --------------------------------------------------
-            # APPEND WORK ORDER ITEM
+            # APPEND
             # --------------------------------------------------
 
             self.append(
                 "required_items",
                 {
-                    "item_code": row["item_code"],
 
-                    "item_name": row["item_name"],
+                    "item_code":
+                        row["item_code"],
 
-                    "description": row["description"],
+                    "item_name":
+                        row["item_name"],
 
-                    # VERY IMPORTANT
-                    "operation": row["operation"],
+                    "description":
+                        row["description"],
 
-                    "required_qty": required_qty,
+                    # IMPORTANT
+                    "operation":
+                        row["operation"],
 
-                    "uom": row["uom"],
+                    "required_qty":
+                        required_qty,
 
-                    "stock_uom": row["stock_uom"],
+                    "transferred_qty":
+                        transferred_qty,
+
+                    "uom":
+                        row["uom"],
+
+                    "stock_uom":
+                        row["stock_uom"],
 
                     "conversion_factor":
                         row["conversion_factor"],
@@ -660,17 +719,23 @@ class CustomWorkOrder(WorkOrder):
                         row["allow_alternative_item"],
 
                     "include_item_in_manufacturing":
-                        row["include_item_in_manufacturing"],
+                        row[
+                            "include_item_in_manufacturing"
+                        ],
 
-                    "rate": row["rate"],
+                    "rate":
+                        row["rate"],
 
                     "amount":
-                        flt(row["rate"]) * required_qty,
-                },
+                        (
+                            flt(row["rate"])
+                            * required_qty
+                        ),
+                }
             )
 
         # ======================================================
-        # UPDATE AVAILABLE QTY
+        # AVAILABLE QTY
         # ======================================================
 
         try:
@@ -679,9 +744,8 @@ class CustomWorkOrder(WorkOrder):
 
         except Exception:
 
-            # Availability is only a helper.
-            # Do not prevent Work Order creation if this
-            # calculation fails.
+            # Availability calculation should not
+            # prevent Work Order creation.
             pass
 
     # ==========================================================
@@ -692,42 +756,38 @@ class CustomWorkOrder(WorkOrder):
         """
         Chemical manufacturing logic.
 
-        Process loss is not treated as pending production.
+        Process loss is disabled.
 
-        Example:
-
-            WO Qty = 1000 KG
-
-            BATCHING completed = 1000 KG
-            HOMOGENIZING completed = 980 KG
-            FINALIZING completed = 970 KG
-
-        Manufactured Qty = MAX operation completed qty
-
-                           = 1000 KG
-
-        Process Loss = 0
-
+        Manufactured Qty is the maximum completed quantity
+        across all operations.
         """
 
-        # Run ERPNext standard logic first
+        # Run standard ERPNext calculation
         super().update_work_order_qty()
 
         # ------------------------------------------------------
-        # Disable standard process loss
+        # DISABLE PROCESS LOSS
         # ------------------------------------------------------
 
         self.process_loss_qty = 0
 
         # ------------------------------------------------------
-        # Calculate Manufactured Qty
+        # MANUFACTURED QTY
         # ------------------------------------------------------
 
         if self.get("operations"):
 
+            completed_quantities = [
+                flt(
+                    operation.completed_qty
+                )
+                for operation
+                in self.get("operations")
+                or []
+            ]
+
             self.manufactured_qty = max(
-                flt(operation.completed_qty)
-                for operation in self.get("operations") or []
+                completed_quantities
             )
 
         else:
