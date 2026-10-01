@@ -248,11 +248,9 @@ class CustomWorkOrder(WorkOrder):
         """
         Custom Work Order validation.
 
-        Required Items are rebuilt from the selected BOM using:
-
-            item_code + operation
-
-        Therefore the same item can exist in multiple operations.
+        Required Items are always rebuilt from the selected BOM,
+        one Required Item row per BOM item row - never grouped,
+        merged, or summed. See _rebuild_required_items_from_bom.
 
         Example:
 
@@ -260,7 +258,10 @@ class CustomWorkOrder(WorkOrder):
             R1101 -> HOMOGENIZING
             R1101 -> FINALIZING
 
-        These remain separate rows.
+        These remain separate rows. Likewise, duplicate
+        item_code + operation combinations within the same BOM
+        (e.g. the same raw material listed twice under FINALIZING)
+        remain separate rows too.
         """
 
         # Run standard ERPNext validation first
@@ -381,15 +382,12 @@ class CustomWorkOrder(WorkOrder):
         """
         Override standard ERPNext Required Items generation.
 
-        Required Items are generated directly from BOM items.
-
-        Grouping key:
-
-            item_code + operation
-
-        NOT:
-
-            item_code only
+        Standard ERPNext (get_bom_items_as_dict) groups BOM rows
+        by item_code alone, merging/losing rows. We bypass that
+        entirely: every BOM item row becomes exactly one Required
+        Item row, carrying that row's own operation, never merged
+        with any other row - not even a duplicate item_code +
+        operation row.
         """
 
         if not self.bom_no:
@@ -489,9 +487,10 @@ class CustomWorkOrder(WorkOrder):
 
         IMPORTANT:
 
-        The grouping key is:
-
-            (item_code, operation)
+        Every BOM item row becomes exactly one Required Item
+        row, in BOM row order, carrying that row's own operation.
+        Rows are NEVER grouped, merged, or summed - not even when
+        item_code + operation repeats across multiple BOM rows.
 
         Example BOM:
 
@@ -499,15 +498,14 @@ class CustomWorkOrder(WorkOrder):
             R1101 -> HOMOGENIZING   20 KG
             R1101 -> FINALIZING     10 KG
 
-        Result:
+            S6014 -> FINALIZING      3.0 KG
+            S6014 -> FINALIZING      0.7 KG
+            S6014 -> FINALIZING      3.0 KG
 
-            R1101 -> BATCHING       50 KG
-            R1101 -> HOMOGENIZING   20 KG
-            R1101 -> FINALIZING     10 KG
-
-        NOT:
-
-            R1101 -> 80 KG
+        Result: 6 separate Required Item rows (scaled by
+        work_order_qty / bom_qty), in the same order - S6014
+        stays as three separate FINALIZING rows, NOT one row
+        summed to 6.7 KG.
         """
 
         # ======================================================
@@ -559,16 +557,20 @@ class CustomWorkOrder(WorkOrder):
             # CRITICAL KEY
             # --------------------------------------------------
             #
-            # Same item + different operation
-            # = separate row
+            # bom_item.idx makes this key unique per BOM row.
             #
-            # Same item + same operation
-            # = quantity summed
+            # Every BOM item row becomes exactly one Required
+            # Item row - never merged, never summed. Even when
+            # the same item_code + operation repeats multiple
+            # times in the BOM (e.g. the same raw material added
+            # twice under the same operation), each occurrence
+            # stays a separate row.
             # --------------------------------------------------
 
             key = (
                 item_code,
-                operation
+                operation,
+                bom_item.idx,
             )
 
             if key not in grouped:
@@ -638,7 +640,8 @@ class CustomWorkOrder(WorkOrder):
 
             old_key = (
                 old_row.item_code,
-                old_row.operation or ""
+                old_row.operation or "",
+                old_row.idx,
             )
 
             existing_transferred[
