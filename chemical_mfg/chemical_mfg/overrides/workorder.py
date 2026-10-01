@@ -220,60 +220,12 @@
 #             self.manufactured_qty = flt(self.qty_completed)
 
 import frappe
-from frappe import _
 from frappe.utils import flt
 
 from erpnext.manufacturing.doctype.work_order.work_order import WorkOrder
 
 
 class CustomWorkOrder(WorkOrder):
-
-    # ==========================================================
-    # ALLOW WITHOUT BOM
-    # ==========================================================
-    # Consolidated in from the (now retired) custom_manufacturing
-    # app's Work Order override, which used to collide with this
-    # class via override_doctype_class (only one app's class can
-    # win per doctype - having two apps register one for the same
-    # doctype silently dropped whichever loaded first). Merging it
-    # here means there's a single Work Order override again.
-    #
-    # When custom_allow_without_bom is checked, the Work Order is
-    # fully manual: no BOM, no auto-rebuilt Required Items or
-    # Operations - the user fills those tables in by hand.
-
-    def before_validate(self):
-        if self.get("custom_allow_without_bom"):
-            self.flags.ignore_mandatory = True
-            self.bom_no = None
-
-        try:
-            super().before_validate()
-        except AttributeError:
-            pass
-
-    def _validate_without_bom(self):
-        critical_fields = {
-            "production_item": _("Item To Manufacture"),
-            "qty": _("Qty To Manufacture"),
-            "company": _("Company"),
-            "wip_warehouse": _("Work-in-Progress Warehouse"),
-            "fg_warehouse": _("Target Warehouse"),
-        }
-
-        for field, label in critical_fields.items():
-            if not self.get(field):
-                frappe.throw(_("{0} is a mandatory field").format(label))
-
-        self.validate_qty()
-
-        if not self.get("required_items"):
-            frappe.throw(
-                _("Required Items table cannot be empty. Please add raw materials manually.")
-            )
-
-        if hasattr(self, "calculate_operating_cost"):
-            self.calculate_operating_cost()
 
     # ==========================================================
     # DISABLE STRICT STANDARD VALIDATIONS
@@ -311,20 +263,6 @@ class CustomWorkOrder(WorkOrder):
         (e.g. the same raw material listed twice under FINALIZING)
         remain separate rows too.
         """
-
-        # ------------------------------------------------------
-        # ALLOW WITHOUT BOM
-        # ------------------------------------------------------
-        # Manual mode: skip the entire BOM-driven validate path
-        # below (operation status + required items rebuild both
-        # assume a BOM exists).
-
-        if self.get("custom_allow_without_bom"):
-            self._validate_without_bom()
-            return
-
-        if not self.bom_no:
-            frappe.throw(_("BOM No is mandatory when 'Allow Without BOM' is unchecked."))
 
         # Run standard ERPNext validation first
         super().validate()
@@ -451,9 +389,6 @@ class CustomWorkOrder(WorkOrder):
         with any other row - not even a duplicate item_code +
         operation row.
         """
-
-        if self.get("custom_allow_without_bom"):
-            return
 
         if not self.bom_no:
             return
@@ -863,21 +798,3 @@ class CustomWorkOrder(WorkOrder):
             self.manufactured_qty = flt(
                 self.qty_completed
             )
-
-    # ==========================================================
-    # SUBMIT
-    # ==========================================================
-
-    def on_submit(self):
-        """
-        Allow Without BOM: there are no operations/BOM driving
-        progress in this mode, so force status straight to
-        "Not Started" instead of whatever ERPNext's standard
-        on_submit would otherwise compute.
-        """
-
-        if self.get("custom_allow_without_bom"):
-            self.status = "Not Started"
-            self.db_set("status", "Not Started")
-
-        super().on_submit()
