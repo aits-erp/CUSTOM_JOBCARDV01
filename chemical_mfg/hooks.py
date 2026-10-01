@@ -8,7 +8,8 @@ app_license = "mit"
 
 
 doctype_js = {
-    "Job Card": "public/js/job_card.js"
+    "Job Card": "public/js/job_card.js",
+    "Work Order": "public/js/work_order.js"
 }
 # -----------------------------
 # Override Doctype Classes
@@ -53,6 +54,19 @@ override_whitelisted_methods = {
         "chemical_mfg.chemical_mfg.whitelisted.api.custom_make_work_order"
 
 }
+
+# -----------------------------
+# Fixtures
+# -----------------------------
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [
+            ["dt", "=", "Work Order"],
+            ["fieldname", "=", "custom_allow_without_bom"]
+        ]
+    }
+]
 
 
 # -----------------------------------------
