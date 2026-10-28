@@ -36,6 +36,10 @@ def execute(filters=None):
     blending_fg_input = 0.0
     packing_material = 0.0
 
+    rm_cost = 0.0
+    blending_cost = 0.0
+    packing_cost = 0.0
+
     operation_data = []
 
     grand_planned = 0.0
@@ -163,7 +167,8 @@ def execute(filters=None):
                     "item_code",
                     "item_name",
                     "qty",
-                    "uom"
+                    "uom",
+                    "basic_amount"
                 ]
             )
 
@@ -176,10 +181,12 @@ def execute(filters=None):
                     actual[item_code] = {
                         "item_name": sed.item_name,
                         "qty": 0.0,
+                        "amount": 0.0,
                         "uom": sed.uom or stock_uom
                     }
 
                 actual[item_code]["qty"] += qty
+                actual[item_code]["amount"] += flt(sed.basic_amount)
 
                 grand_consumed += qty
 
@@ -191,6 +198,7 @@ def execute(filters=None):
         for item_code, values in actual.items():
 
             qty = flt(values["qty"])
+            amount = flt(values["amount"])
 
             item_default_bom = frappe.db.get_value(
                 "Item",
@@ -214,8 +222,10 @@ def execute(filters=None):
                     or item_default_bom
                 ):
                     blending_fg_input += qty
+                    blending_cost += amount
                 else:
                     rm_input += qty
+                    rm_cost += amount
 
             # ----------------------------------------------------
             # PACKING / FILTRATION
@@ -227,6 +237,7 @@ def execute(filters=None):
             ):
 
                 packing_material += qty
+                packing_cost += amount
 
             # ----------------------------------------------------
             # OTHER OPERATIONS
@@ -235,6 +246,7 @@ def execute(filters=None):
             else:
 
                 rm_input += qty
+                rm_cost += amount
 
 
         # ========================================================
@@ -296,6 +308,32 @@ def execute(filters=None):
 
 
     # ============================================================
+    # COST (same layout as the Yield Calculation sheet)
+    # ============================================================
+
+    operating_cost = flt(wo.total_operating_cost)
+
+    total_cost = (
+        rm_cost
+        + blending_cost
+        + packing_cost
+        + operating_cost
+    )
+
+    # Total Cost / FG Manufactured
+    cost_per_kg = (
+        total_cost / fg_manufactured
+        if fg_manufactured else 0
+    )
+
+    # (Total Cost - Blending Cost) / Net Production
+    net_cost_per_kg = (
+        (total_cost - blending_cost) / net_production
+        if net_production else 0
+    )
+
+
+    # ============================================================
     # REPORT DATA
     # ============================================================
 
@@ -319,7 +357,14 @@ def execute(filters=None):
         "fg_manufactured": fg_manufactured,
         "packing_material": packing_material,
         "gross_yield": gross_yield,
-        "net_yield": net_yield
+        "net_yield": net_yield,
+        "rm_cost": rm_cost,
+        "blending_cost": blending_cost,
+        "packing_cost": packing_cost,
+        "operating_cost": operating_cost,
+        "total_cost": total_cost,
+        "cost_per_kg": cost_per_kg,
+        "net_cost_per_kg": net_cost_per_kg
     })
 
 
@@ -551,6 +596,55 @@ def get_columns():
             "label": "Net Yield %",
             "fieldname": "net_yield",
             "fieldtype": "Percent",
+            "width": 120
+        },
+
+        {
+            "label": "RM Cost",
+            "fieldname": "rm_cost",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+
+        {
+            "label": "Blending Cost",
+            "fieldname": "blending_cost",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+
+        {
+            "label": "Packing Cost",
+            "fieldname": "packing_cost",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+
+        {
+            "label": "Operating Cost",
+            "fieldname": "operating_cost",
+            "fieldtype": "Currency",
+            "width": 120
+        },
+
+        {
+            "label": "Total Cost",
+            "fieldname": "total_cost",
+            "fieldtype": "Currency",
+            "width": 130
+        },
+
+        {
+            "label": "Cost / Unit",
+            "fieldname": "cost_per_kg",
+            "fieldtype": "Currency",
+            "width": 110
+        },
+
+        {
+            "label": "Net Cost / Unit",
+            "fieldname": "net_cost_per_kg",
+            "fieldtype": "Currency",
             "width": 120
         }
     ]
