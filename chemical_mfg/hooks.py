@@ -34,13 +34,21 @@ doc_events = {
     # Job Card
     "Job Card": {
         "before_save": "chemical_mfg.chemical_mfg.whitelisted.job_card_methods.apply_quality_template_from_work_order",
-        "validate": "chemical_mfg.chemical_mfg.manufacturing.job_card_sequence_validation.validate_job_card_sequence"
+        "validate": "chemical_mfg.chemical_mfg.manufacturing.job_card_sequence_validation.validate_job_card_sequence",
+        "on_submit": "chemical_mfg.chemical_mfg.whitelisted.yield_methods.update_yield_from_doc",
+        "on_cancel": "chemical_mfg.chemical_mfg.whitelisted.yield_methods.update_yield_from_doc"
     },
 
     # Stock Entry
     "Stock Entry": {
-        "on_submit": "chemical_mfg.chemical_mfg.whitelisted.stock_entry_methods.update_consumed_qty",
-        "on_cancel": "chemical_mfg.chemical_mfg.whitelisted.stock_entry_methods.rollback_consumed_qty",
+        "on_submit": [
+            "chemical_mfg.chemical_mfg.whitelisted.stock_entry_methods.update_consumed_qty",
+            "chemical_mfg.chemical_mfg.whitelisted.yield_methods.update_yield_from_doc"
+        ],
+        "on_cancel": [
+            "chemical_mfg.chemical_mfg.whitelisted.stock_entry_methods.rollback_consumed_qty",
+            "chemical_mfg.chemical_mfg.whitelisted.yield_methods.update_yield_from_doc"
+        ],
     }
 }
 
